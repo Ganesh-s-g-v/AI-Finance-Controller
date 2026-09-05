@@ -115,7 +115,8 @@ cp .env.example .env
 npm run dev
 ```
 
-- Web App: [http://localhost:5173](http://localhost:5173)
+- Web App: [[http://localhost:5173](https://ai-finance-controller-frontend.vercel.app/)](https://ai-finance-controller-frontend.vercel.app/)
+check it our here
 
 ---
 
