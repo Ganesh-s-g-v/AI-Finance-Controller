@@ -13,6 +13,53 @@ export interface ApiResponse<T> {
   };
 }
 
+// User & Auth Types
+export type UserRole = 'ADMIN' | 'CONTROLLER' | 'AUDITOR' | 'ANALYST';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  company_name?: string;
+  avatar_url?: string;
+  created_at?: string;
+  last_login?: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+export interface UserSessionHistoryItem {
+  session_id: string;
+  company_name: string;
+  created_at: string;
+  total_records: number;
+  matched: number;
+  review_required: number;
+  exceptions: number;
+  match_rate: number;
+  processing_time_ms: number;
+  status: string;
+}
+
+export interface CompanyData {
+  id: string;
+  name: string;
+  industry: string;
+  matchRate: number;
+  total_records?: number;
+  anomaly_status?: 'NONE' | 'PENDING' | 'RESOLVED';
+  match_status?: 'MATCHED' | 'REVIEW_REQUIRED' | 'EXCEPTION';
+  invoice_amount?: number;
+  razorpay_amount?: number;
+  bank_amount?: number;
+  last_reconciled?: string;
+}
+
 // Source Types
 export type SourceType = 'bank' | 'razorpay' | 'invoice';
 

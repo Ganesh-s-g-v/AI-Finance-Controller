@@ -71,207 +71,171 @@ export const TransactionDrawer: React.FC<TransactionDrawerProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className="absolute inset-0 bg-black/40 backdrop-blur-md"
           />
 
-          {/* Drawer Panel */}
+          {/* Modal Panel */}
           <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed inset-y-0 right-0 w-full max-w-2xl bg-background-secondary border-l border-border z-50 shadow-2xl flex flex-col justify-between overflow-y-auto"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="relative w-full max-w-3xl max-h-full bg-surface border border-border shadow-2xl rounded-[24px] flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div>
-              <div className="p-6 border-b border-border flex items-center justify-between sticky top-0 bg-background-secondary/95 backdrop-blur z-10">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs font-mono font-bold text-foreground-primary">
-                      {transaction.orderId}
-                    </span>
-                    <Badge variant={statusVariant} dot size="sm">
-                      {transaction.status.replace('_', ' ')}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-foreground-secondary">
-                    3-Way Transaction Reconciliation Audit Record
+            <div className="px-6 py-5 border-b border-border/50 flex items-center justify-between sticky top-0 bg-surface/90 backdrop-blur z-10">
+              <div className="flex items-center gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground-primary leading-tight">
+                    Transaction Audit
+                  </h3>
+                  <p className="text-sm font-mono text-foreground-secondary mt-0.5">
+                    {transaction.orderId}
                   </p>
                 </div>
+                <div className="h-8 w-px bg-border mx-2" />
+                <Badge variant={statusVariant} dot size="sm">
+                  {transaction.status.replace('_', ' ')}
+                </Badge>
+              </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <div className="text-xs text-foreground-muted">Confidence Score</div>
-                    <div className="text-sm font-mono font-bold text-brand">
-                      {transaction.confidenceScore} / 100
-                    </div>
-                  </div>
-                  <button
-                    onClick={onClose}
-                    className="p-1.5 rounded-lg border border-border hover:bg-white/[0.05] text-foreground-muted hover:text-foreground-primary transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-elevated border border-border/50">
+                  <span className="text-xs text-foreground-muted">Confidence</span>
+                  <span className={`text-sm font-bold ${
+                    transaction.confidenceScore >= 80 ? 'text-emerald-500' :
+                    transaction.confidenceScore >= 60 ? 'text-amber-500' : 'text-rose-500'
+                  }`}>
+                    {transaction.confidenceScore}%
+                  </span>
                 </div>
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-full hover:bg-surface-elevated text-foreground-muted hover:text-foreground-primary transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
+            </div>
 
-              {/* Confidence Progress Bar */}
-              <div className="w-full bg-background-primary h-1.5">
-                <div 
-                  className={`h-full transition-all duration-300 ${
-                    transaction.confidenceScore >= 80 ? 'bg-emerald-400' :
-                    transaction.confidenceScore >= 60 ? 'bg-amber-400' : 'bg-rose-400'
-                  }`}
-                  style={{ width: `${transaction.confidenceScore}%` }}
-                />
-              </div>
-
-              {/* Body Content */}
-              <div className="p-6 space-y-6">
-                {/* Gemini 2.5 Flash AI Explanation Card */}
-                <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-500/10 via-brand/5 to-transparent border border-indigo-500/30 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400">
-                    <Sparkles className="w-4 h-4 text-indigo-400" />
-                    <span>Gemini 2.5 Flash Explanation (Read-Only)</span>
+            {/* Body Content */}
+            <div className="overflow-y-auto flex-1 p-6 space-y-8">
+              {/* AI Explanation Card */}
+              <div className="p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 flex gap-4">
+                <div className="mt-0.5">
+                  <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-indigo-500" />
                   </div>
-                  <p className="text-xs text-foreground-primary leading-relaxed">
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-foreground-primary mb-1">AI Analysis</h4>
+                  <p className="text-sm text-foreground-secondary leading-relaxed">
                     {defaultExplanation}
                   </p>
-                  <div className="pt-2 flex items-center gap-3 text-[10px] text-foreground-muted font-mono">
-                    <span>Deterministic rule locked</span>
-                    <span>•</span>
-                    <span>AI cannot modify financial records</span>
-                  </div>
                 </div>
+              </div>
 
-                {/* 3-Source Comparison View */}
-                <div className="space-y-4">
-                  <h4 className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">
-                    Three-Source Lineage Comparison
-                  </h4>
-
-                  {/* 1. Invoice Record */}
-                  <div className="p-4 rounded-xl bg-background-primary/50 border border-border space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-blue-400" />
-                        <span className="text-xs font-semibold text-foreground-primary">Invoice Record</span>
-                      </div>
-                      <span className="text-[10px] font-mono text-foreground-muted">{transaction.invoiceId}</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <span className="text-foreground-muted text-[11px]">Customer</span>
-                        <div className="font-medium truncate">{transaction.customerName}</div>
+              {/* Data Sources */}
+              <div>
+                <h4 className="text-xs font-semibold text-foreground-muted uppercase tracking-wider mb-4 px-1">
+                  Reconciliation Sources
+                </h4>
+                
+                <div className="space-y-3">
+                  {/* Source 1: Invoice */}
+                  <div className="p-4 rounded-2xl bg-surface-elevated/30 hover:bg-surface-elevated/50 transition-colors border border-border/50 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-blue-500" />
                       </div>
                       <div>
-                        <span className="text-foreground-muted text-[11px]">Issue Date</span>
-                        <div className="font-mono">{formatDate(transaction.invoiceDate)}</div>
-                      </div>
-                      <div>
-                        <span className="text-foreground-muted text-[11px]">Gross Total</span>
-                        <div className="font-mono font-semibold text-foreground-primary">
-                          {formatCurrency(transaction.invoiceGross)}
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground-primary">Invoice</p>
+                          <span className="text-[10px] font-mono text-foreground-muted bg-surface-elevated px-1.5 py-0.5 rounded">{transaction.invoiceId}</span>
                         </div>
+                        <p className="text-xs text-foreground-secondary mt-0.5">{transaction.customerName} &bull; {formatDate(transaction.invoiceDate)}</p>
                       </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-foreground-muted mb-0.5">Gross Total</p>
+                      <p className="text-sm font-semibold font-mono text-foreground-primary">{formatCurrency(transaction.invoiceGross)}</p>
                     </div>
                   </div>
 
-                  {/* 2. Razorpay Settlement (Bridge) */}
-                  <div className="p-4 rounded-xl bg-brand/5 border border-brand/20 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-brand" />
-                        <span className="text-xs font-semibold text-foreground-primary">Razorpay Settlement (Bridge)</span>
+                  {/* Source 2: Razorpay */}
+                  <div className="p-4 rounded-2xl bg-surface-elevated/30 hover:bg-surface-elevated/50 transition-colors border border-border/50 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center shrink-0">
+                        <CreditCard className="w-5 h-5 text-brand" />
                       </div>
-                      <span className="text-[10px] font-mono text-brand font-medium">{transaction.settlementId}</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground-primary">Razorpay Settlement</p>
+                          <span className="text-[10px] font-mono text-brand/70 bg-brand/5 px-1.5 py-0.5 rounded">{transaction.settlementId}</span>
+                        </div>
+                        <p className="text-xs text-foreground-secondary mt-0.5">Gross: {formatCurrency(transaction.settlementGross)} &bull; Fee/Tax: -{formatCurrency(transaction.fee + transaction.tax)}</p>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-4 gap-2 text-xs">
-                      <div>
-                        <span className="text-foreground-muted text-[11px]">Gross Amount</span>
-                        <div className="font-mono">{formatCurrency(transaction.settlementGross)}</div>
-                      </div>
-                      <div>
-                        <span className="text-foreground-muted text-[11px]">Fee (MDR)</span>
-                        <div className="font-mono text-amber-400">-{formatCurrency(transaction.fee)}</div>
-                      </div>
-                      <div>
-                        <span className="text-foreground-muted text-[11px]">Tax (18% GST)</span>
-                        <div className="font-mono text-amber-400">-{formatCurrency(transaction.tax)}</div>
-                      </div>
-                      <div>
-                        <span className="text-foreground-muted text-[11px]">Net Settled</span>
-                        <div className="font-mono font-bold text-brand">{formatCurrency(transaction.settlementNet)}</div>
-                      </div>
+                    <div className="text-right">
+                      <p className="text-xs text-foreground-muted mb-0.5">Net Settled</p>
+                      <p className="text-sm font-semibold font-mono text-brand">{formatCurrency(transaction.settlementNet)}</p>
                     </div>
                   </div>
 
-                  {/* 3. Bank Statement Entry */}
-                  <div className="p-4 rounded-xl bg-background-primary/50 border border-border space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-emerald-400" />
-                        <span className="text-xs font-semibold text-foreground-primary">Bank Statement Entry</span>
-                      </div>
-                      <span className="text-[10px] font-mono text-foreground-muted">
-                        {transaction.bankRef || 'No UTR Reference'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <span className="text-foreground-muted text-[11px]">Txn Date</span>
-                        <div className="font-mono">{formatDate(transaction.bankDate)}</div>
+                  {/* Source 3: Bank */}
+                  <div className="p-4 rounded-2xl bg-surface-elevated/30 hover:bg-surface-elevated/50 transition-colors border border-border/50 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                        <Building2 className="w-5 h-5 text-emerald-500" />
                       </div>
                       <div>
-                        <span className="text-foreground-muted text-[11px]">Narration</span>
-                        <div className="truncate text-foreground-secondary">{transaction.bankDesc}</div>
-                      </div>
-                      <div>
-                        <span className="text-foreground-muted text-[11px]">Credit Deposit</span>
-                        <div className="font-mono font-bold text-emerald-400">
-                          {formatCurrency(transaction.bankCredit)}
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground-primary">Bank Statement</p>
+                          <span className="text-[10px] font-mono text-foreground-muted bg-surface-elevated px-1.5 py-0.5 rounded">{transaction.bankRef || 'No UTR'}</span>
                         </div>
+                        <p className="text-xs text-foreground-secondary mt-0.5 truncate max-w-[200px]">{transaction.bankDesc}</p>
                       </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-foreground-muted mb-0.5">Credit Deposit</p>
+                      <p className="text-sm font-semibold font-mono text-emerald-500">{formatCurrency(transaction.bankCredit)}</p>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* CA Human Approval Footer */}
-            <div className="p-6 border-t border-border bg-background-secondary/95 backdrop-blur flex items-center justify-between gap-3">
-              <div className="text-[11px] text-foreground-muted">
-                Chartered Accountant Decision
-              </div>
-
-              <div className="flex items-center gap-2">
+            {/* Footer */}
+            <div className="p-5 border-t border-border/50 bg-surface-elevated/30 flex items-center justify-between">
+              <p className="text-xs text-foreground-muted font-medium">CA Verification Required</p>
+              <div className="flex items-center gap-3">
                 <Button
-                  variant="danger"
-                  size="sm"
-                  icon={<Ban className="w-3.5 h-3.5" />}
+                  variant="outline"
                   onClick={() => onReject(transaction.id)}
+                  className="!text-error !border-error/20 hover:!bg-error/10"
                 >
-                  Flag as Exception
+                  <Ban className="w-4 h-4 mr-2" />
+                  Flag Exception
                 </Button>
                 <Button
-                  variant="success"
-                  size="sm"
-                  icon={<Check className="w-3.5 h-3.5" />}
+                  variant="primary"
                   onClick={() => onApprove(transaction.id)}
+                  className="shadow-sm"
                 >
-                  Approve Match (CA Verified)
+                  <Check className="w-4 h-4 mr-2" />
+                  Approve Match
                 </Button>
               </div>
             </div>
           </motion.div>
-        </>
+        </div>
       )}
     </AnimatePresence>
   );

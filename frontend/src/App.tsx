@@ -1,19 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import { Navbar } from '@/components/layout/Navbar';
-import { Sidebar, NavTab } from '@/components/layout/Sidebar';
-import { MetricsGrid } from '@/components/dashboard/MetricsGrid';
-import { ReconciliationFlowVisualizer } from '@/components/dashboard/ReconciliationFlowVisualizer';
-import { TransactionsTable } from '@/components/dashboard/TransactionsTable';
+import { NavTab } from '@/components/layout/PillNavigation';
+import { GlassTopBar } from '@/components/layout/GlassTopBar';
+import { DashboardView } from '@/components/dashboard/DashboardView';
+import { WorkspaceUpload } from '@/components/upload/WorkspaceUpload';
+import { ResultsView } from '@/components/dashboard/ResultsView';
+import { ReviewView } from '@/components/dashboard/ReviewView';
 import { TransactionDrawer, DrawerTransaction } from '@/components/dashboard/TransactionDrawer';
-import { UploadModal } from '@/components/upload/UploadModal';
-import { Button } from '@/components/ui/Button';
-import { Play, Download } from 'lucide-react';
+import { AuthProvider, useAuth } from '@/lib/authContext';
+import { AuthScreen } from '@/components/auth/AuthScreen';
+import { AuthModal } from '@/components/auth/AuthModal';
+import { SessionHistoryModal } from '@/components/dashboard/SessionHistoryModal';
+import { getCompaniesApi } from '@/lib/api';
+import { CompanyData } from '@/types';
+import { motion, AnimatePresence } from 'framer-motion';
 
-export const App: React.FC = () => {
-  const [isDark, setIsDark] = useState<boolean>(true);
+const MainApp: React.FC = () => {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [isDark, setIsDark] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [selectedTx, setSelectedTx] = useState<DrawerTransaction | null>(null);
-  const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
+  const [selectedCompany, setSelectedCompany] = useState<string>('');
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<CompanyData[]>([]);
+
+  // Modals
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
+
+  // Load companies
+  const loadCompanies = async () => {
+    try {
+      const data = await getCompaniesApi();
+      setCompanies(data);
+      if (data.length > 0) {
+        setSelectedCompany((prev) => prev || data[0].name);
+      } else if (user?.company_name) {
+        setSelectedCompany(user.company_name);
+      }
+    } catch (err) {
+      console.debug('Error loading companies:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (user?.company_name) {
+        setSelectedCompany(user.company_name);
+      }
+      loadCompanies();
+    }
+  }, [isAuthenticated, user]);
 
   // Theme persistence & DOM class toggle
   useEffect(() => {
@@ -35,7 +71,7 @@ export const App: React.FC = () => {
         aiExplanation: '✅ Approved by Chartered Accountant. Marked as MATCHED.',
       });
     }
-    alert(`Transaction ${id} approved successfully! Stored in audit trail.`);
+    alert(`Transaction ${id} approved successfully!`);
   };
 
   const handleRejectTransaction = (id: string) => {
@@ -49,97 +85,113 @@ export const App: React.FC = () => {
     alert(`Transaction ${id} flagged as Exception.`);
   };
 
-  return (
-    <div className="min-h-screen bg-background-primary text-foreground-primary flex flex-col font-sans antialiased selection:bg-brand/30 bg-mesh transition-colors duration-200">
-      {/* Top Navbar */}
-      <Navbar
+  const handleViewCompany = (companyName: string) => {
+    setSelectedCompany(companyName);
+    setActiveTab('results');
+  };
+
+  const handleResumeSession = (sessionId: string, companyName: string) => {
+    setActiveSessionId(sessionId);
+    setSelectedCompany(companyName);
+    setActiveTab('results');
+  };
+
+  // ── AUTH GATE: Before login, render dedicated clean Auth Screen ───────────
+  if (!isAuthenticated && !authLoading) {
+    return (
+      <AuthScreen
         isDark={isDark}
         onToggleTheme={() => setIsDark(!isDark)}
-        onOpenUpload={() => setIsUploadOpen(true)}
+      />
+    );
+  }
+
+  const renderContent = () => {
+    const animationProps = {
+      initial: { opacity: 0, y: 10 },
+      animate: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: -10 },
+      transition: { duration: 0.2 },
+      className: 'h-full w-full flex flex-col relative z-10',
+    };
+
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <motion.div key="dashboard" {...animationProps}>
+            <DashboardView
+              companies={companies}
+              onViewCompany={handleViewCompany}
+              onNavigate={(tab) => setActiveTab(tab as NavTab)}
+            />
+          </motion.div>
+        );
+      case 'workspace':
+        return (
+          <motion.div key="workspace" {...animationProps}>
+            <WorkspaceUpload
+              currentCompanyName={selectedCompany}
+              onCompanyNameChange={setSelectedCompany}
+              onRunReconciliation={(sessionId, companyName) => {
+                if (sessionId) setActiveSessionId(sessionId);
+                if (companyName) setSelectedCompany(companyName);
+                loadCompanies();
+                setActiveTab('results');
+              }}
+            />
+          </motion.div>
+        );
+      case 'results':
+        return (
+          <motion.div key="results" {...animationProps}>
+            <ResultsView
+              companyName={selectedCompany || 'Apex Technologies Pvt Ltd'}
+              sessionId={activeSessionId ?? undefined}
+              onSelectTransaction={(tx) => setSelectedTx(tx)}
+              onNavigateToWorkspace={() => setActiveTab('workspace')}
+            />
+          </motion.div>
+        );
+      case 'review':
+        return (
+          <motion.div key="review" {...animationProps}>
+            <ReviewView
+              companies={companies}
+              activeSessionId={activeSessionId}
+              onNavigateToWorkspace={() => setActiveTab('workspace')}
+              onViewResults={(company) => {
+                setSelectedCompany(company);
+                setActiveTab('results');
+              }}
+            />
+          </motion.div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0b0e14] text-slate-900 dark:text-slate-100 flex flex-col font-sans antialiased transition-colors duration-200 relative overflow-hidden">
+      {/* Top Navigation Bar */}
+      <GlassTopBar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        isDark={isDark}
+        onToggleTheme={() => setIsDark(!isDark)}
+        selectedCompany={selectedCompany}
+        onSelectCompany={setSelectedCompany}
+        companies={companies}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onOpenHistory={() => setIsHistoryModalOpen(true)}
+        onNavigateToWorkspace={() => setActiveTab('workspace')}
       />
 
-      {/* Main Layout Body */}
-      <div className="flex-1 flex max-w-[1600px] w-full mx-auto">
-        {/* Left Sidebar */}
-        <Sidebar
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          exceptionCount={6}
-          reviewCount={18}
-        />
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12 flex flex-col relative z-10 min-h-0">
+        <AnimatePresence mode="wait">{renderContent()}</AnimatePresence>
+      </main>
 
-        {/* Center Content View */}
-        <main className="flex-1 p-6 lg:p-8 space-y-8 overflow-y-auto max-w-[calc(100vw-16rem)]">
-          {/* Executive Dashboard Header Banner */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border/80">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-surface-elevated text-foreground-secondary border border-border">
-                  Q2 FY 2026-27
-                </span>
-                <span className="text-xs text-foreground-muted">•</span>
-                <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  Live Sync Active
-                </span>
-              </div>
-              <h2 className="text-2xl font-bold tracking-tight text-foreground-primary">
-                Reconciliation Overview
-              </h2>
-              <p className="text-xs text-foreground-secondary mt-0.5">
-                Automated 3-way cross-verification: Invoices ➔ Razorpay Settlements ➔ Bank Statements.
-              </p>
-            </div>
-
-            {/* Quick Primary Actions */}
-            <div className="flex items-center gap-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Download className="w-3.5 h-3.5" />}
-                onClick={() => alert("Exporting comprehensive CA Reconciliation Audit Summary...")}
-              >
-                Export Audit Pack
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Play className="w-3.5 h-3.5 fill-current" />}
-                onClick={() => setIsUploadOpen(true)}
-                className="shadow-glow-indigo"
-              >
-                Run Batch Reconciliation
-              </Button>
-            </div>
-          </div>
-
-          {/* 1. Executive Metrics Grid (KPI Cards) */}
-          <MetricsGrid />
-
-          {/* 2. Three-Way Reconciliation Visualizer */}
-          <ReconciliationFlowVisualizer />
-
-          {/* 3. Detailed Financial Transactions Table */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-foreground-primary tracking-tight">
-                  Reconciliation Register
-                </h3>
-                <p className="text-xs text-foreground-secondary">
-                  Inspect matched records, review ambiguous cases, and resolve exceptions.
-                </p>
-              </div>
-            </div>
-
-            <TransactionsTable
-              onSelectTransaction={(tx) => setSelectedTx(tx)}
-            />
-          </div>
-        </main>
-      </div>
-
-      {/* Side Drawer for Transaction Inspection & Gemini Explanation */}
+      {/* Transaction Detail Drawer */}
       <TransactionDrawer
         isOpen={selectedTx !== null}
         transaction={selectedTx}
@@ -148,12 +200,27 @@ export const App: React.FC = () => {
         onReject={handleRejectTransaction}
       />
 
-      {/* Upload 3-Source CSV Modal */}
-      <UploadModal
-        isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      {/* Session / Audit History Modal */}
+      <SessionHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        onResumeSession={handleResumeSession}
       />
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 };
 

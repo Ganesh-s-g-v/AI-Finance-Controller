@@ -4,53 +4,51 @@
 
 @layer base {
   :root {
-    /* Dark Theme Tokens (Default - Linear/Stripe/Ramp grade) */
-    --bg-primary: #090A0F;
-    --bg-secondary: #11121A;
-    --bg-tertiary: #181926;
-    --bg-card: rgba(17, 18, 26, 0.85);
-    --border: #232438;
-    --border-subtle: rgba(255, 255, 255, 0.07);
-    --border-hover: rgba(255, 255, 255, 0.15);
-    --text-primary: #F3F4F8;
-    --text-secondary: #9496A8;
-    --text-muted: #5E6075;
-    --accent: #6366F1;
-    --accent-hover: #818CF8;
-    --accent-glow: rgba(99, 102, 241, 0.15);
-    --success: #10B981;
-    --success-bg: rgba(16, 185, 129, 0.1);
-    --warning: #F59E0B;
-    --warning-bg: rgba(245, 158, 11, 0.1);
-    --error: #EF4444;
-    --error-bg: rgba(239, 68, 68, 0.1);
-    --info: #3B82F6;
-    --info-bg: rgba(59, 130, 246, 0.1);
+    /* Light Theme Tokens (Apple/Awwwards Default) */
+    --bg-primary: #F5F5F7; /* Apple gray */
+    --bg-secondary: #FFFFFF;
+    --bg-tertiary: #F0F0F5;
+    --bg-card: rgba(255, 255, 255, 0.7);
+    --border: rgba(0, 0, 0, 0.08);
+    --border-subtle: rgba(0, 0, 0, 0.04);
+    --border-hover: rgba(0, 0, 0, 0.12);
+    --text-primary: #1D1D1F;
+    --text-secondary: #86868B;
+    --text-muted: #A1A1A6;
+    --accent: #0066CC;
+    --accent-hover: #007AFF;
+    --success: #34C759;
+    --success-bg: rgba(52, 199, 89, 0.1);
+    --warning: #FF9500;
+    --warning-bg: rgba(255, 149, 0, 0.1);
+    --error: #FF3B30;
+    --error-bg: rgba(255, 59, 48, 0.1);
+    --info: #007AFF;
+    --info-bg: rgba(0, 122, 255, 0.1);
   }
 
-  html.light {
-    /* Light Theme Tokens */
-    --bg-primary: #F8F9FC;
-    --bg-secondary: #FFFFFF;
-    --bg-tertiary: #F1F3F9;
-    --bg-card: rgba(255, 255, 255, 0.9);
-    --border: #E2E4ED;
-    --border-subtle: rgba(0, 0, 0, 0.06);
-    --border-hover: rgba(0, 0, 0, 0.12);
-    --text-primary: #0F172A;
-    --text-secondary: #64748B;
-    --text-muted: #94A3B8;
-    --accent: #4F46E5;
-    --accent-hover: #6366F1;
-    --accent-glow: rgba(79, 70, 229, 0.1);
-    --success: #059669;
-    --success-bg: rgba(5, 150, 105, 0.08);
-    --warning: #D97706;
-    --warning-bg: rgba(217, 119, 6, 0.08);
-    --error: #DC2626;
-    --error-bg: rgba(220, 38, 38, 0.08);
-    --info: #2563EB;
-    --info-bg: rgba(37, 99, 235, 0.08);
+  html.dark {
+    /* Dark Theme Tokens (Cinematic Dark) */
+    --bg-primary: #000000;
+    --bg-secondary: #1C1C1E;
+    --bg-tertiary: #2C2C2E;
+    --bg-card: rgba(28, 28, 30, 0.7);
+    --border: rgba(255, 255, 255, 0.15);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.2);
+    --text-primary: #F5F5F7;
+    --text-secondary: #86868B;
+    --text-muted: #636366;
+    --accent: #0A84FF;
+    --accent-hover: #409CFF;
+    --success: #32D74B;
+    --success-bg: rgba(50, 215, 75, 0.15);
+    --warning: #FF9F0A;
+    --warning-bg: rgba(255, 159, 10, 0.15);
+    --error: #FF453A;
+    --error-bg: rgba(255, 69, 58, 0.15);
+    --info: #0A84FF;
+    --info-bg: rgba(10, 132, 255, 0.15);
   }
 
   body {
@@ -62,21 +60,7 @@
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
   }
-}
 
-/* Background Gradients & Mesh */
-.bg-mesh {
-  background-image: 
-    radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
-    radial-gradient(at 85% 25%, rgba(59, 130, 246, 0.06) 0px, transparent 40%),
-    radial-gradient(at 50% 80%, rgba(16, 185, 129, 0.04) 0px, transparent 50%);
-}
-
-.light .bg-mesh {
-  background-image: 
-    radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
-    radial-gradient(at 85% 25%, rgba(59, 130, 246, 0.04) 0px, transparent 40%),
-    radial-gradient(at 50% 80%, rgba(16, 185, 129, 0.03) 0px, transparent 50%);
 }
 
 /* Tabular numbers for financial precision */
@@ -85,22 +69,6 @@
   font-feature-settings: 'tnum' on, 'zero' on;
 }
 
-/* Glassmorphism surfaces */
-.glass-panel {
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
-}
-
-.glass-panel-hover {
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.glass-panel-hover:hover {
-  border-color: var(--border-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.3);
-}
 
 /* Custom Scrollbars */
 ::-webkit-scrollbar {

@@ -15,6 +15,18 @@ from app.models.reconciliation import (
     DashboardSummaryResponse,
 )
 
+from app.models.user import (
+    UserRole,
+    UserBase,
+    UserCreate,
+    UserLogin,
+    UserProfile,
+    TokenResponse,
+    CompanyModel,
+    CompanyCreate,
+    UserSessionHistoryItem,
+)
+
 __all__ = [
     "ApiResponse",
     "ErrorDetail",
@@ -38,4 +50,14 @@ __all__ = [
     "ReviewRequest",
     "ReviewResponse",
     "DashboardSummaryResponse",
+    "UserRole",
+    "UserBase",
+    "UserCreate",
+    "UserLogin",
+    "UserProfile",
+    "TokenResponse",
+    "CompanyModel",
+    "CompanyCreate",
+    "UserSessionHistoryItem",
 ]
+

@@ -18,9 +18,12 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = Field(default="placeholder-key")
     SUPABASE_SERVICE_ROLE_KEY: str = Field(default="placeholder-service-key")
     
+    # PostgreSQL
+    DATABASE_URL: str | None = None
+
     # Google Gemini AI Configuration
     GEMINI_API_KEY: str = Field(default="placeholder-gemini-key")
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     
     # CORS Configuration
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"

@@ -34,6 +34,7 @@ class ReconciliationRequest(BaseModel):
     bank_upload_id: UUID
     razorpay_upload_id: UUID
     invoice_upload_id: UUID
+    company_name: Optional[str] = None
 
 
 class ReconciliationSummaryResponse(BaseModel):

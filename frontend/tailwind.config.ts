@@ -27,20 +27,20 @@ export default {
           muted: 'var(--text-muted)',
         },
         brand: {
-          DEFAULT: '#6366F1',
-          hover: '#818CF8',
-          light: '#EEF2FF',
-          dark: '#4338CA',
+          DEFAULT: '#0066CC', // Apple blue
+          hover: '#0055B3',
+          light: '#E5F0FA',
+          dark: '#003366',
         },
         status: {
-          matched: '#22C55E',
-          review: '#F59E0B',
-          exception: '#EF4444',
-          info: '#3B82F6',
+          matched: '#34C759', // Apple green
+          review: '#FF9500',  // Apple orange
+          exception: '#FF3B30', // Apple red
+          info: '#007AFF', // Apple blue
         }
       },
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        sans: ['Geist', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       spacing: {
@@ -50,10 +50,11 @@ export default {
         '128': '32rem',
       },
       boxShadow: {
+        'apple-light': '0 4px 24px -4px rgba(0, 0, 0, 0.04), 0 2px 8px -2px rgba(0, 0, 0, 0.02)',
+        'apple-heavy': '0 12px 48px -12px rgba(0, 0, 0, 0.12), 0 4px 16px -4px rgba(0, 0, 0, 0.04)',
+        'apple-glass': 'inset 0 1px 1px rgba(255, 255, 255, 0.6), 0 4px 24px -4px rgba(0, 0, 0, 0.04)',
         'card-dark': '0 4px 20px -2px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.4)',
         'card-light': '0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03)',
-        'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.3)',
-        'glow-success': '0 0 25px -5px rgba(34, 197, 94, 0.3)',
       },
       animation: {
         'pulse-subtle': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

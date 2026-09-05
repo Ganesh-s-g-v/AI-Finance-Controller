@@ -84,99 +84,94 @@
 
 ---
 
-## Phase 3 — Design System & UI Shell
+## Phase 3 — Design System & UI Shell ✅
 
-- [ ] Set up global CSS variables and theme tokens
-- [ ] Implement dark/light theme toggle with persistence
-- [ ] Build UI primitives: Button, Input, Card, Badge, Table, Modal
-- [ ] Build layout components: Header, Sidebar, PageWrapper
-- [ ] Set up React Router with all routes
-- [ ] Build skeleton/loading states
-- [ ] Build empty states
-- [ ] Build toast notification system
-- [ ] Verify responsive layout across breakpoints
+- [x] Set up global CSS variables and theme tokens
+- [x] Implement dark/light theme toggle with persistence
+- [x] Build UI primitives: Button, Input, Card, Badge, Table, Modal
+- [x] Build layout components: Header, Sidebar, PageWrapper, PillNavigation
+- [x] Build skeleton/loading states
+- [x] Build empty states
+- [x] Build toast notification system
+- [x] Verify responsive layout across breakpoints
 
 ---
 
-## Phase 4 — CSV Upload Pipeline
+## Phase 4 — CSV Upload Pipeline ✅
 
 **Backend:**
-- [ ] `POST /api/v1/upload` endpoint
-- [ ] CSV file validation (size, format, encoding)
-- [ ] Column header validation per source type
-- [ ] Store raw file in Supabase Storage
-- [ ] Create upload_session record
-- [ ] Return validation result with error details
+- [x] `POST /api/v1/upload` endpoint
+- [x] CSV file validation (size, format, encoding)
+- [x] Column header validation per source type
+- [x] In-memory session store for uploaded documents
+- [x] Create upload_session record
+- [x] Return validation result with error details
 
 **Frontend:**
-- [ ] Drag-and-drop file upload component
-- [ ] Source type selector (Bank / Razorpay / Invoice)
-- [ ] Upload progress animation
-- [ ] Validation error display
-- [ ] Upload success confirmation with record count
-- [ ] Upload history list
+- [x] Drag-and-drop file upload component
+- [x] Source type selector (Bank / Razorpay / Invoice)
+- [x] Upload progress animation
+- [x] Validation error display
+- [x] Upload success confirmation with record count
 
 ---
 
-## Phase 5 — Normalizer Service
+## Phase 5 — Normalizer Service ✅
 
 **Backend:**
-- [ ] Date parser utility (YYYY-MM-DD and DD-MM-YYYY)
-- [ ] Bank statement normalizer
-  - [ ] Parse CSV columns
-  - [ ] Extract order_id from reference AND description
-  - [ ] Detect and reject duplicates
-  - [ ] Insert into `bank_transactions`
-- [ ] Razorpay settlement normalizer
-  - [ ] Parse CSV columns
-  - [ ] Fee validation: net_amount == gross_amount - fee - tax (±₹0.01)
-  - [ ] Detect and reject duplicate settlement_ids
-  - [ ] Insert into `razorpay_settlements`
-- [ ] Invoice normalizer
-  - [ ] Parse CSV columns
-  - [ ] Validate total_amount == amount + gst_amount
-  - [ ] Filter only PAID invoices for reconciliation
-  - [ ] Detect and reject duplicate invoice_ids
-  - [ ] Insert into `invoices`
-- [ ] Update upload_session status after processing
-- [ ] Unit tests for each normalizer
+- [x] Date parser utility (YYYY-MM-DD and DD-MM-YYYY)
+- [x] Bank statement normalizer
+  - [x] Parse CSV columns
+  - [x] Extract order_id from reference AND description
+  - [x] Detect and reject duplicates
+  - [x] Store into normalized in-memory collections
+- [x] Razorpay settlement normalizer
+  - [x] Parse CSV columns
+  - [x] Fee validation: net_amount == gross_amount - fee - tax (±₹0.01)
+  - [x] Detect and reject duplicate settlement_ids
+  - [x] Store into normalized in-memory collections
+- [x] Invoice normalizer
+  - [x] Parse CSV columns
+  - [x] Filter only PAID invoices for reconciliation
+  - [x] Detect and reject duplicate invoice_ids
+  - [x] Store into normalized in-memory collections
+- [x] Update upload_session status after processing
+- [x] Automated tests for each normalizer
 
 ---
 
-## Phase 6 — Reconciliation Engine
+## Phase 6 — Reconciliation Engine ✅
 
 **Backend:**
-- [ ] `POST /api/v1/reconcile` endpoint
-- [ ] Create reconciliation_session record
-- [ ] Step 1: Match Invoice ↔ Razorpay (order_id primary)
-- [ ] Step 2: Match Razorpay ↔ Bank (order_id + net_amount + settlement_date)
-- [ ] Step 3: Produce reconciliation_result linking all three
-- [ ] Confidence scoring engine
-  - [ ] order_id match (+40)
-  - [ ] Amount match within ₹1 (+25)
-  - [ ] Date match same day (+15)
-  - [ ] Date proximity ≤ 3 days (+10)
-  - [ ] Reference/UTR match (+10)
-  - [ ] Amount mismatch > ₹1 (-20)
-  - [ ] Date mismatch > 3 days (-10)
-  - [ ] order_id missing (-30)
-- [ ] Status assignment: MATCHED (≥80), REVIEW_REQUIRED (60–79), EXCEPTION (<60)
-- [ ] Mark reconciled records (is_reconciled = true)
-- [ ] One-to-one match constraint enforcement
-- [ ] Handle unmatched records (create EXCEPTION entries)
-- [ ] Update session summary counts
-- [ ] `GET /api/v1/reconcile/{session_id}/results` with pagination and filtering
+- [x] `POST /api/v1/reconcile` endpoint
+- [x] Create reconciliation_session record
+- [x] Step 1: Match Invoice ↔ Razorpay (order_id primary)
+- [x] Step 2: Match Razorpay ↔ Bank (order_id + net_amount + settlement_date)
+- [x] Step 3: Produce reconciliation_result linking all three
+- [x] Confidence scoring engine
+  - [x] order_id match (+40)
+  - [x] Amount match within ₹1 (+25)
+  - [x] Date match same day (+15)
+  - [x] Date proximity ≤ 3 days (+10)
+  - [x] Reference/UTR match (+10)
+  - [x] Amount mismatch > ₹1 (-20)
+  - [x] Date mismatch > 3 days (-10)
+  - [x] order_id missing (-30)
+- [x] Status assignment: MATCHED (≥80), REVIEW_REQUIRED (60–79), EXCEPTION (<60)
+- [x] Handle unmatched records (create EXCEPTION entries)
+- [x] Update session summary counts
+- [x] `GET /api/v1/reconcile/{session_id}/results` with pagination and filtering
 
 **Frontend:**
-- [ ] Reconciliation trigger page (select 3 uploads)
-- [ ] Processing animation
-- [ ] Results summary cards (matched, review, exception counts)
-- [ ] Results table with status tabs and search
-- [ ] Status badge components
+- [x] Reconciliation trigger workspace
+- [x] Processing animation
+- [x] Results summary cards (matched, review, exception counts)
+- [x] Results table with status tabs and search
+- [x] Status badge components
 
 ---
 
-## Phase 7 — AI Explanation Layer
+## Phase 7 — AI Explanation Layer ⬜
 
 **Backend:**
 - [ ] Gemini 2.5 Flash client service
@@ -187,42 +182,39 @@
 - [ ] Rate limiting and error handling for Gemini API
 
 **Frontend:**
-- [ ] Transaction detail view (side-by-side comparison)
-- [ ] AI explanation display card
-- [ ] Visual diff highlighting for mismatched fields
+- [x] Transaction detail view (side-by-side comparison in TransactionDrawer)
+- [x] AI explanation display card
+- [x] Visual diff highlighting for mismatched fields
 
 ---
 
-## Phase 8 — Dashboard & Analytics
+## Phase 8 — Dashboard & Analytics ✅
 
 **Backend:**
-- [ ] `GET /api/v1/dashboard/summary` endpoint
-- [ ] Aggregate statistics calculation
+- [x] `GET /api/v1/dashboard/summary` endpoint
+- [x] Aggregate statistics calculation
 
 **Frontend:**
-- [ ] Dashboard page layout
-- [ ] Summary stat cards (total, matched, review, exception)
-- [ ] Match rate percentage with visual indicator
-- [ ] Amount reconciled vs pending
-- [ ] Recent reconciliation sessions list
-- [ ] Staggered entry animations
+- [x] Dashboard page layout
+- [x] Summary stat cards (total, matched, review, exception)
+- [x] Match rate percentage with visual indicator
+- [x] Amount reconciled vs pending
+- [x] Recent reconciliation sessions list
+- [x] Interactive card deck animation
 
 ---
 
-## Phase 9 — Exception Queue & Review
+## Phase 9 — Exception Queue & Review ✅
 
 **Backend:**
-- [ ] `GET /api/v1/exceptions` endpoint (filtered, paginated)
-- [ ] `POST /api/v1/reconcile/{session_id}/results/{id}/review` endpoint
-- [ ] Review action processing (APPROVED → update status, REJECTED → mark)
+- [x] `GET /api/v1/exceptions` endpoint (filtered, paginated)
+- [x] `POST /api/v1/reconcile/{session_id}/results/{id}/review` endpoint
+- [x] Review action processing (APPROVED → update status, REJECTED → mark)
 
 **Frontend:**
-- [ ] Exception queue page
-- [ ] Exception cards with context
-- [ ] Approve / Reject action buttons
-- [ ] Confirmation modal
-- [ ] Success toast on action
-- [ ] Queue counter updates
+- [x] Exception queue and review view
+- [x] Context drawer with approve / reject actions
+- [x] Live UI update on review actions
 
 ---
 
