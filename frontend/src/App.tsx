@@ -96,8 +96,25 @@ const MainApp: React.FC = () => {
     setActiveTab('results');
   };
 
-  // ── AUTH GATE: Before login, render dedicated clean Auth Screen ───────────
-  if (!isAuthenticated && !authLoading) {
+  // ── AUTH GATE: show a loader while restoring the session so the
+  // dashboard never flashes for a second on failed logins, then the
+  // dedicated clean Auth Screen before login ──────────────────────────
+  if (authLoading) {
+    return (
+      <div className="min-h-screen w-full bg-slate-50 dark:bg-[#0b0e14] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-brand text-white flex items-center justify-center font-bold text-lg shadow-md shadow-brand/20 animate-pulse">
+            ⚡
+          </div>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Restoring your workspace…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <AuthScreen
         isDark={isDark}

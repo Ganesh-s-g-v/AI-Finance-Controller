@@ -7,6 +7,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isAuthenticating: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string, role?: UserRole, company_name?: string) => Promise<void>;
   demoLogin: (role: 'cfo' | 'auditor' | 'admin') => Promise<void>;
@@ -17,11 +18,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('auth_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('auth_user');
+      return saved ? (JSON.parse(saved) as UserProfile) : null;
+    } catch {
+      localStorage.removeItem('auth_user');
+      return null;
+    }
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Separate flag for login/register actions so the app gate doesn't flash
+  // the dashboard while credentials are being verified.
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
   // Validate and sync user on mount
   useEffect(() => {
@@ -47,15 +56,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true);
+    setIsAuthenticating(true);
     try {
-      const res = await loginApi(email, password);
+      const res = await loginApi(email.trim(), password);
+      // Persist synchronously before updating state so a re-render or
+      // remount always sees a consistent session.
       localStorage.setItem('auth_token', res.access_token);
       localStorage.setItem('auth_user', JSON.stringify(res.user));
       setToken(res.access_token);
       setUser(res.user);
     } finally {
-      setIsLoading(false);
+      setIsAuthenticating(false);
     }
   };
 
@@ -66,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: UserRole = 'CONTROLLER',
     company_name = 'Apex Technologies Pvt Ltd'
   ) => {
-    setIsLoading(true);
+    setIsAuthenticating(true);
     try {
       const res = await registerApi({ name, email, password, role, company_name });
       localStorage.setItem('auth_token', res.access_token);
@@ -74,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(res.access_token);
       setUser(res.user);
     } finally {
-      setIsLoading(false);
+      setIsAuthenticating(false);
     }
   };
 
@@ -89,9 +100,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await logoutApi();
-    setToken(null);
-    setUser(null);
+    try {
+      await logoutApi();
+    } finally {
+      // Always clear client state, even if the backend call fails/offline.
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      setToken(null);
+      setUser(null);
+    }
   };
 
   return (
@@ -101,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         isAuthenticated: !!token && !!user,
         isLoading,
+        isAuthenticating,
         login,
         register,
         demoLogin,

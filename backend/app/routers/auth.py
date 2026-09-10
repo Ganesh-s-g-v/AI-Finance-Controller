@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db, UserDB
@@ -21,33 +22,80 @@ from app import store
 router = APIRouter(prefix="/auth", tags=["Authentication & User Management"])
 
 
+def safe_user_role(value: Optional[object]) -> UserRole:
+    """Map any stored role string to a valid UserRole, defaulting to CONTROLLER.
+
+    Previously `UserRole(v) if v in UserRole.__members__ else ...` could still
+    raise ValueError for unexpected DB values (e.g. lowercase or legacy roles),
+    turning /login and /me into 500s. A 500 on /me makes the frontend clear the
+    session and bounce straight back to the auth screen.
+    """
+    if isinstance(value, UserRole):
+        return value
+    if isinstance(value, str):
+        cleaned = value.strip().upper()
+        # Accept common aliases used by older seeds / UI labels
+        aliases = {"CFO": "CONTROLLER", "FINANCE_CONTROLLER": "CONTROLLER"}
+        cleaned = aliases.get(cleaned, cleaned)
+        try:
+            return UserRole(cleaned)
+        except ValueError:
+            pass
+    return UserRole.CONTROLLER
+
+
+def _extract_bearer_token(request: Request) -> Optional[str]:
+    """Robustly extract a Bearer token from the Authorization header."""
+    auth = request.headers.get("authorization")
+    if not auth:
+        return None
+    parts = auth.strip().split(None, 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1].strip():
+        return None
+    return parts[1].strip()
+
+
+def build_user_profile(user: UserDB) -> UserProfile:
+    """Build a UserProfile from a DB row without ever raising on role values."""
+    return UserProfile(
+        id=UUID(user.id),
+        email=user.email,
+        name=user.name,
+        role=safe_user_role(user.role),
+        company_name=user.company_name,
+        avatar_url=user.avatar_url,
+        created_at=user.created_at,
+        last_login=user.last_login,
+    )
+
+
 def get_current_user_optional(
-    authorization: Optional[str] = Header(None),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> Optional[UserDB]:
-    """Extract authenticated user if Authorization header is present."""
-    if not authorization:
-        return None
+    """Extract authenticated user if a valid Authorization header is present."""
     try:
-        scheme, token = authorization.split(" ")
-        if scheme.lower() != "bearer":
+        token = _extract_bearer_token(request)
+        if not token:
             return None
         payload = decode_access_token(token)
         if not payload or "sub" not in payload:
             return None
         user_id = payload["sub"]
-        user = db.query(UserDB).filter(UserDB.id == user_id).first()
+        if not user_id:
+            return None
+        user = db.query(UserDB).filter(UserDB.id == str(user_id)).first()
         return user
     except Exception:
         return None
 
 
 def get_current_user(
-    authorization: Optional[str] = Header(None),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> UserDB:
     """Enforce authenticated user requirement."""
-    user = get_current_user_optional(authorization=authorization, db=db)
+    user = get_current_user_optional(request=request, db=db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -72,14 +120,21 @@ async def register_user(req: UserCreate, db: Session = Depends(get_db)):
         email=req.email.lower().strip(),
         name=req.name.strip(),
         hashed_password=hash_password(req.password),
-        role=req.role.value if hasattr(req.role, "value") else str(req.role),
-        company_name=req.company_name or "Apex Technologies Pvt Ltd",
+        role=safe_user_role(req.role).value,
+        company_name=(req.company_name or "Apex Technologies Pvt Ltd").strip(),
         avatar_url=req.avatar_url or f"https://api.dicebear.com/7.x/initials/svg?seed={req.name}",
         created_at=datetime.now(timezone.utc),
         last_login=datetime.now(timezone.utc),
     )
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email address already exists.",
+        )
     db.refresh(new_user)
 
     # Automatically create user's personal company workspace if company_name provided
@@ -104,16 +159,7 @@ async def register_user(req: UserCreate, db: Session = Depends(get_db)):
         db.commit()
 
     token = create_access_token({"sub": new_user.id, "email": new_user.email, "role": new_user.role})
-    profile = UserProfile(
-        id=UUID(new_user.id),
-        email=new_user.email,
-        name=new_user.name,
-        role=UserRole(new_user.role) if new_user.role in UserRole.__members__ else UserRole.CONTROLLER,
-        company_name=new_user.company_name,
-        avatar_url=new_user.avatar_url,
-        created_at=new_user.created_at,
-        last_login=new_user.last_login,
-    )
+    profile = build_user_profile(new_user)
     return ApiResponse(
         success=True,
         data=TokenResponse(access_token=token, user=profile),
@@ -132,18 +178,10 @@ async def login_user(req: UserLogin, db: Session = Depends(get_db)):
 
     user.last_login = datetime.now(timezone.utc)
     db.commit()
+    db.refresh(user)
 
     token = create_access_token({"sub": user.id, "email": user.email, "role": user.role})
-    profile = UserProfile(
-        id=UUID(user.id),
-        email=user.email,
-        name=user.name,
-        role=UserRole(user.role) if user.role in UserRole.__members__ else UserRole.CONTROLLER,
-        company_name=user.company_name,
-        avatar_url=user.avatar_url,
-        created_at=user.created_at,
-        last_login=user.last_login,
-    )
+    profile = build_user_profile(user)
     return ApiResponse(
         success=True,
         data=TokenResponse(access_token=token, user=profile),
@@ -153,16 +191,7 @@ async def login_user(req: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=ApiResponse[UserProfile])
 async def get_me(current_user: UserDB = Depends(get_current_user)):
     """Retrieve the profile and workspace state of the logged-in user."""
-    profile = UserProfile(
-        id=UUID(current_user.id),
-        email=current_user.email,
-        name=current_user.name,
-        role=UserRole(current_user.role) if current_user.role in UserRole.__members__ else UserRole.CONTROLLER,
-        company_name=current_user.company_name,
-        avatar_url=current_user.avatar_url,
-        created_at=current_user.created_at,
-        last_login=current_user.last_login,
-    )
+    profile = build_user_profile(current_user)
     return ApiResponse(success=True, data=profile)
 
 
