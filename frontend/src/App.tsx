@@ -20,8 +20,28 @@ const MainApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [selectedTx, setSelectedTx] = useState<DrawerTransaction | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<string>('');
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
+    // Survive refresh/navigation: the active batch is rehydrated from storage.
+    try {
+      return localStorage.getItem('afc_active_session_id');
+    } catch {
+      return null;
+    }
+  });
   const [companies, setCompanies] = useState<CompanyData[]>([]);
+
+  // Keep the persisted active batch in sync with state.
+  useEffect(() => {
+    try {
+      if (activeSessionId) {
+        localStorage.setItem('afc_active_session_id', activeSessionId);
+      } else {
+        localStorage.removeItem('afc_active_session_id');
+      }
+    } catch {
+      // Storage unavailable (private mode, etc.) — app still works in-memory.
+    }
+  }, [activeSessionId]);
 
   // Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);

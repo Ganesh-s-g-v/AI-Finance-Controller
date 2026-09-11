@@ -3,7 +3,7 @@ import { Search, Filter, UploadCloud } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { DrawerTransaction } from './TransactionDrawer';
 import { ReconciliationPanel } from './ReconciliationPanel';
-import { getReconciliationResults } from '@/lib/api';
+import { getReconciliationResults, getUserHistoryApi } from '@/lib/api';
 
 interface ResultsViewProps {
   companyName: string;
@@ -21,13 +21,36 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   const [liveData, setLiveData] = useState<DrawerTransaction[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
+  // Fall back to the latest persisted batch so refresh/deep-links still show data.
+  const [resolvedSessionId, setResolvedSessionId] = useState<string | undefined>(sessionId);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (sessionId) {
+      setResolvedSessionId(sessionId);
+      return;
+    }
+    let cancelled = false;
+    getUserHistoryApi()
+      .then((history) => {
+        if (!cancelled && history && history.length > 0) {
+          setResolvedSessionId(history[0].session_id);
+        }
+      })
+      .catch(() => {
+        // No history available — empty state below handles it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
+    const effectiveSessionId = resolvedSessionId;
+    if (!effectiveSessionId) {
       setLiveData([]);
       return;
     }
-    getReconciliationResults(sessionId)
+    getReconciliationResults(effectiveSessionId)
       .then(({ results }) => {
         if (!results || results.length === 0) {
           setLiveData([]);
@@ -68,7 +91,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
         console.debug('Results load note:', err.message);
         setLiveData([]);
       });
-  }, [sessionId]);
+  }, [resolvedSessionId]);
 
   const allData = liveData ?? [];
   const filteredData = allData.filter(
