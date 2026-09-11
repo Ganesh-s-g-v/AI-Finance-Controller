@@ -6,6 +6,7 @@ SQLAlchemy storage (SQLite/PostgreSQL) so users can log back in and resume
 their historical sessions, upload batches, and company audit profiles.
 """
 from typing import Dict, List, Optional, Any
+from decimal import Decimal
 from uuid import UUID
 from datetime import datetime, timezone
 import json
@@ -38,6 +39,47 @@ reconciliation_results: Dict[str, List[ReconciliationResultItem]] = {}
 # ---------------------------------------------------------------------------
 # Result Lookup and Mutator Helpers
 # ---------------------------------------------------------------------------
+def _uuid_or_none(value: Any) -> Optional[UUID]:
+    """Safely parse a UUID, returning None for empty/invalid values."""
+    if not value:
+        return None
+    try:
+        return value if isinstance(value, UUID) else UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _result_item_from_db(r: Any) -> ReconciliationResultItem:
+    """Rebuild a ReconciliationResultItem from DB columns.
+
+    Nested detail objects (invoice/settlement/bank_transaction) are session-scoped
+    and live only in memory, so DB-restored items carry the match data without them.
+    """
+    matched_on = None
+    if getattr(r, "matched_on", None):
+        try:
+            matched_on = json.loads(r.matched_on)
+        except (ValueError, TypeError):
+            matched_on = None
+    return ReconciliationResultItem(
+        id=UUID(str(r.id)),
+        session_id=UUID(str(r.session_id)),
+        invoice_id=_uuid_or_none(getattr(r, "invoice_id", None)),
+        settlement_id=_uuid_or_none(getattr(r, "settlement_id", None)),
+        bank_txn_id=_uuid_or_none(getattr(r, "bank_txn_id", None)),
+        match_type=r.match_type or "FULL",
+        confidence_score=r.confidence_score or 0,
+        status=r.status or "MATCHED",
+        matched_on=matched_on,
+        amount_difference=Decimal(str(r.amount_difference)) if r.amount_difference is not None else None,
+        ai_explanation=r.ai_explanation,
+        reviewed_by=r.reviewed_by,
+        reviewed_at=r.reviewed_at,
+        review_action=r.review_action,
+        created_at=r.created_at or datetime.now(timezone.utc),
+    )
+
+
 def find_result(result_id: UUID) -> Optional[ReconciliationResultItem]:
     """Return the first ReconciliationResultItem whose .id matches result_id."""
     for items in reconciliation_results.values():
@@ -48,8 +90,8 @@ def find_result(result_id: UUID) -> Optional[ReconciliationResultItem]:
     db = SessionLocal()
     try:
         db_res = db.query(ReconciliationResultDB).filter(ReconciliationResultDB.id == str(result_id)).first()
-        if db_res and db_res.data_json:
-            return ReconciliationResultItem.model_validate_json(db_res.data_json)
+        if db_res:
+            return _result_item_from_db(db_res)
     except Exception as e:
         logger.error(f"Error querying result from DB: {e}")
     finally:
@@ -86,8 +128,6 @@ def update_result(result_id: UUID, **kwargs) -> Optional[ReconciliationResultIte
                 db_res.reviewed_at = kwargs["reviewed_at"]
             if "review_action" in kwargs:
                 db_res.review_action = kwargs["review_action"].value if hasattr(kwargs["review_action"], "value") else str(kwargs["review_action"])
-            if updated_item:
-                db_res.data_json = updated_item.model_dump_json()
             db.commit()
     except Exception as e:
         db.rollback()
@@ -117,33 +157,46 @@ def persist_reconciliation_session(
     reconciliation_sessions[sid] = session_data
     reconciliation_results[sid] = results
 
-    # Persist to database
+    # Persist to database (columns mirror the LOCKED Supabase schema).
+    # Detail-table FKs stay NULL: V1 never populates those tables, and the
+    # session-scoped item UUIDs would otherwise violate FK constraints.
     db = SessionLocal()
     try:
-        db_session = db.query(ReconciliationSessionDB).filter(ReconciliationSessionDB.session_id == sid).first()
+        now = datetime.now(timezone.utc)
+        started = session_data.get("created_at") or now
+
+        def _fk(uid: Any) -> Optional[str]:
+            uid = str(uid) if uid else ""
+            if not uid:
+                return None
+            exists = db.query(UploadSessionDB).filter(UploadSessionDB.id == uid).first()
+            return uid if exists else None
+
+        db_session = db.query(ReconciliationSessionDB).filter(ReconciliationSessionDB.id == sid).first()
         if not db_session:
             db_session = ReconciliationSessionDB(
-                session_id=sid,
-                user_id=user_id,
-                company_name=company,
-                bank_upload_id=str(session_data.get("bank_upload_id", "")),
-                razorpay_upload_id=str(session_data.get("razorpay_upload_id", "")),
-                invoice_upload_id=str(session_data.get("invoice_upload_id", "")),
+                id=sid,
+                bank_upload_id=_fk(session_data.get("bank_upload_id")),
+                razorpay_upload_id=_fk(session_data.get("razorpay_upload_id")),
+                invoice_upload_id=_fk(session_data.get("invoice_upload_id")),
                 total_records=session_data.get("total_records", len(results)),
-                matched=session_data.get("matched", 0),
-                review_required=session_data.get("review_required", 0),
-                exceptions=session_data.get("exceptions", 0),
-                processing_time_ms=session_data.get("processing_time_ms", 0),
+                matched_count=session_data.get("matched", 0),
+                review_count=session_data.get("review_required", 0),
+                exception_count=session_data.get("exceptions", 0),
                 status=session_data.get("status", "COMPLETED"),
-                created_at=session_data.get("created_at", datetime.now(timezone.utc)),
+                started_at=started,
+                completed_at=now,
             )
             db.add(db_session)
         else:
-            db_session.user_id = user_id
-            db_session.company_name = company
-            db_session.matched = session_data.get("matched", db_session.matched)
-            db_session.review_required = session_data.get("review_required", db_session.review_required)
-            db_session.exceptions = session_data.get("exceptions", db_session.exceptions)
+            db_session.matched_count = session_data.get("matched", db_session.matched_count)
+            db_session.review_count = session_data.get("review_required", db_session.review_count)
+            db_session.exception_count = session_data.get("exceptions", db_session.exception_count)
+            db_session.completed_at = now
+
+        # Flush the parent row first: the models declare no ForeignKey metadata,
+        # so the unit-of-work cannot order parent/child inserts by itself.
+        db.flush()
 
         # Batch insert results
         for item in results:
@@ -153,19 +206,18 @@ def persist_reconciliation_session(
                 db_item = ReconciliationResultDB(
                     id=item_id,
                     session_id=sid,
-                    invoice_id=str(item.invoice_id) if item.invoice_id else None,
-                    settlement_id=str(item.settlement_id) if item.settlement_id else None,
-                    bank_txn_id=str(item.bank_txn_id) if item.bank_txn_id else None,
+                    invoice_id=None,
+                    settlement_id=None,
+                    bank_txn_id=None,
                     match_type=item.match_type.value if hasattr(item.match_type, "value") else str(item.match_type),
                     confidence_score=item.confidence_score,
                     status=item.status.value if hasattr(item.status, "value") else str(item.status),
-                    matched_on_json=json.dumps(item.matched_on) if item.matched_on else None,
+                    matched_on=json.dumps(item.matched_on) if item.matched_on else None,
                     amount_difference=float(item.amount_difference) if item.amount_difference is not None else None,
                     ai_explanation=item.ai_explanation,
                     reviewed_by=item.reviewed_by,
                     reviewed_at=item.reviewed_at,
                     review_action=item.review_action.value if item.review_action and hasattr(item.review_action, "value") else None,
-                    data_json=item.model_dump_json(),
                     created_at=item.created_at,
                 )
                 db.add(db_item)
@@ -217,31 +269,31 @@ def persist_reconciliation_session(
 
 
 def get_user_session_history(user_id: Optional[str] = None) -> List[UserSessionHistoryItem]:
-    """Retrieve full chronological session history for the active user or all sessions."""
+    """Retrieve full chronological session history.
+
+    NOTE: the LOCKED schema has no per-session user/company columns (auth is
+    deferred for V1), so history returns all sessions newest-first.
+    """
     db = SessionLocal()
     history: List[UserSessionHistoryItem] = []
     try:
-        query = db.query(ReconciliationSessionDB)
-        if user_id:
-            query = query.filter(
-                (ReconciliationSessionDB.user_id == user_id) | (ReconciliationSessionDB.user_id.is_(None))
-            )
-        db_sessions = query.order_by(ReconciliationSessionDB.created_at.desc()).all()
+        db_sessions = db.query(ReconciliationSessionDB).order_by(ReconciliationSessionDB.started_at.desc()).all()
 
         for s in db_sessions:
-            total = s.total_records or 1
-            rate = round((s.matched / total) * 100, 1) if total > 0 else 0.0
+            total = s.total_records or 0
+            matched = s.matched_count or 0
+            rate = round((matched / total) * 100, 1) if total > 0 else 0.0
             history.append(
                 UserSessionHistoryItem(
-                    session_id=UUID(s.session_id),
-                    company_name=s.company_name or "Apex Technologies Pvt Ltd",
-                    created_at=s.created_at or datetime.now(timezone.utc),
-                    total_records=s.total_records or 0,
-                    matched=s.matched or 0,
-                    review_required=s.review_required or 0,
-                    exceptions=s.exceptions or 0,
+                    session_id=UUID(str(s.id)),
+                    company_name="Apex Technologies Pvt Ltd",
+                    created_at=s.started_at or datetime.now(timezone.utc),
+                    total_records=total,
+                    matched=matched,
+                    review_required=s.review_count or 0,
+                    exceptions=s.exception_count or 0,
                     match_rate=rate,
-                    processing_time_ms=s.processing_time_ms or 0,
+                    processing_time_ms=0,
                     status=s.status or "COMPLETED",
                 )
             )
@@ -280,32 +332,27 @@ def restore_session_to_memory(session_id: str) -> bool:
 
     db = SessionLocal()
     try:
-        db_session = db.query(ReconciliationSessionDB).filter(ReconciliationSessionDB.session_id == session_id).first()
+        db_session = db.query(ReconciliationSessionDB).filter(ReconciliationSessionDB.id == session_id).first()
         if not db_session:
             return False
 
         reconciliation_sessions[session_id] = {
-            "session_id": UUID(db_session.session_id),
-            "user_id": db_session.user_id,
-            "company_name": db_session.company_name,
-            "bank_upload_id": UUID(db_session.bank_upload_id) if db_session.bank_upload_id else None,
-            "razorpay_upload_id": UUID(db_session.razorpay_upload_id) if db_session.razorpay_upload_id else None,
-            "invoice_upload_id": UUID(db_session.invoice_upload_id) if db_session.invoice_upload_id else None,
+            "session_id": session_id,
+            "company_name": "Apex Technologies Pvt Ltd",
+            "bank_upload_id": db_session.bank_upload_id,
+            "razorpay_upload_id": db_session.razorpay_upload_id,
+            "invoice_upload_id": db_session.invoice_upload_id,
             "total_records": db_session.total_records,
-            "matched": db_session.matched,
-            "review_required": db_session.review_required,
-            "exceptions": db_session.exceptions,
-            "processing_time_ms": db_session.processing_time_ms,
-            "status": db_session.status,
-            "created_at": db_session.created_at,
+            "matched": db_session.matched_count or 0,
+            "review_required": db_session.review_count or 0,
+            "exceptions": db_session.exception_count or 0,
+            "processing_time_ms": 0,
+            "status": db_session.status or "COMPLETED",
+            "created_at": db_session.started_at,
         }
 
         db_results = db.query(ReconciliationResultDB).filter(ReconciliationResultDB.session_id == session_id).all()
-        items: List[ReconciliationResultItem] = []
-        for r in db_results:
-            if r.data_json:
-                items.append(ReconciliationResultItem.model_validate_json(r.data_json))
-        reconciliation_results[session_id] = items
+        reconciliation_results[session_id] = [_result_item_from_db(r) for r in db_results]
         return True
     except Exception as e:
         logger.error(f"Error restoring session {session_id}: {e}")

@@ -85,37 +85,41 @@ class CompanyDB(Base):
 
 
 class UploadSessionDB(Base):
+    """Mirrors the LOCKED Supabase schema (app/schemas/tables.sql :: upload_sessions)."""
     __tablename__ = "upload_sessions"
 
-    session_id = Column(String(36), primary_key=True)
-    user_id = Column(String(36), index=True, nullable=True)
-    company_name = Column(String(255), nullable=True)
+    id = Column(String(36), primary_key=True)
     source_type = Column(String(50), nullable=False)
+    file_name = Column(Text, nullable=False, default="")
     record_count = Column(Integer, default=0)
-    validation_errors_json = Column(Text, default="[]")
-    duplicate_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    status = Column(String(50), nullable=False, default="PENDING")
+    error_details = Column(Text, nullable=True)
+    uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class ReconciliationSessionDB(Base):
+    """Mirrors the LOCKED Supabase schema (app/schemas/tables.sql :: reconciliation_sessions)."""
     __tablename__ = "reconciliation_sessions"
 
-    session_id = Column(String(36), primary_key=True)
-    user_id = Column(String(36), index=True, nullable=True)
-    company_name = Column(String(255), default="Acme Corp")
-    bank_upload_id = Column(String(36), nullable=False)
-    razorpay_upload_id = Column(String(36), nullable=False)
-    invoice_upload_id = Column(String(36), nullable=False)
+    id = Column(String(36), primary_key=True)
+    bank_upload_id = Column(String(36), nullable=True)
+    razorpay_upload_id = Column(String(36), nullable=True)
+    invoice_upload_id = Column(String(36), nullable=True)
     total_records = Column(Integer, default=0)
-    matched = Column(Integer, default=0)
-    review_required = Column(Integer, default=0)
-    exceptions = Column(Integer, default=0)
-    processing_time_ms = Column(Integer, default=0)
+    matched_count = Column(Integer, default=0)
+    review_count = Column(Integer, default=0)
+    exception_count = Column(Integer, default=0)
     status = Column(String(50), default="COMPLETED")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime, nullable=True)
 
 
 class ReconciliationResultDB(Base):
+    """Mirrors the LOCKED Supabase schema (app/schemas/tables.sql :: reconciliation_results).
+
+    NOTE: invoice_id / settlement_id / bank_txn_id are FKs to detail tables that
+    V1 never populates, so the app persists them as NULL to respect FK constraints.
+    """
     __tablename__ = "reconciliation_results"
 
     id = Column(String(36), primary_key=True)
@@ -126,13 +130,12 @@ class ReconciliationResultDB(Base):
     match_type = Column(String(50), default="FULL")
     confidence_score = Column(Integer, default=100)
     status = Column(String(50), default="MATCHED")
-    matched_on_json = Column(Text, nullable=True)
+    matched_on = Column(Text, nullable=True)  # JSON-encoded dict
     amount_difference = Column(Float, nullable=True)
     ai_explanation = Column(Text, nullable=True)
     reviewed_by = Column(String(255), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     review_action = Column(String(50), nullable=True)
-    data_json = Column(Text, nullable=True)  # serialised result item
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 

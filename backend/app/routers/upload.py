@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
@@ -5,8 +6,11 @@ from app.models.common import ApiResponse
 from app.models.upload import SourceType, UploadSessionResponse
 from app.services.normalizer import normalize_bank, normalize_razorpay, normalize_invoice
 from app import store
+from app.database import SessionLocal, UploadSessionDB
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
+
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ApiResponse[UploadSessionResponse])
@@ -48,6 +52,25 @@ async def upload_csv(
         "duplicate_count": duplicate_count,
         "created_at": datetime.utcnow().isoformat(),
     }
+
+    # Persist upload row to DB (best-effort; never fails the upload).
+    # source_type is uppercased to match the DB enum ('BANK'/'RAZORPAY'/'INVOICE').
+    try:
+        db = SessionLocal()
+        try:
+            if not db.query(UploadSessionDB).filter(UploadSessionDB.id == session_id).first():
+                db.add(UploadSessionDB(
+                    id=session_id,
+                    source_type=source_type.value.upper(),
+                    file_name=file.filename or "upload.csv",
+                    record_count=record_count,
+                    status="PROCESSED",
+                ))
+                db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error persisting upload session to DB: {e}")
 
     return ApiResponse(
         success=True,
