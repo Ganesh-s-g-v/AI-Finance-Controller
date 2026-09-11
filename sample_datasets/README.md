@@ -31,7 +31,7 @@ This directory contains pre-configured synthetic corporate financial datasets sp
 ## 🎯 Expected Verification Results
 
 - **Total Transactions Processed**: 55 records
-- **Deterministic Match Rate**: ~94%
+- **Auto-Match Rate (`MATCHED`)**: ~40% (22/55 auto-matched, no review needed)
 - **Matches (`MATCHED`)**: 22 records with 0 variance across all 3 ledgers.
 - **Review Needed (`REVIEW_REQUIRED`)**: 24 records with timing discrepancies (24h-48h settlement delay) or minor variance under the locked ₹1.00 tolerance.
 - **Exceptions (`EXCEPTION`)**: 9 honest exceptions flagged (missing bank deposits, unidentified NEFT credits, uncaptured ERP invoices) with full AI Copilot audit trails.
