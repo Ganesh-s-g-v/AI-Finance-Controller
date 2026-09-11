@@ -20,6 +20,9 @@ from app.database import (
     UploadSessionDB,
     ReconciliationSessionDB,
     ReconciliationResultDB,
+    BankTransactionDB,
+    RazorpaySettlementDB,
+    InvoiceDB,
     CompanyDB,
 )
 
@@ -49,18 +52,35 @@ def _uuid_or_none(value: Any) -> Optional[UUID]:
         return None
 
 
-def _result_item_from_db(r: Any) -> ReconciliationResultItem:
-    """Rebuild a ReconciliationResultItem from DB columns.
-
-    Nested detail objects (invoice/settlement/bank_transaction) are session-scoped
-    and live only in memory, so DB-restored items carry the match data without them.
-    """
+def _result_item_from_db(db: Any, r: Any) -> ReconciliationResultItem:
+    """Rebuild a full ReconciliationResultItem from DB columns, reattaching
+    the persisted invoice / settlement / bank detail rows."""
     matched_on = None
     if getattr(r, "matched_on", None):
         try:
             matched_on = json.loads(r.matched_on)
         except (ValueError, TypeError):
             matched_on = None
+
+    invoice = None
+    settlement = None
+    bank_txn = None
+    try:
+        if getattr(r, "invoice_id", None):
+            row = db.query(InvoiceDB).filter(InvoiceDB.id == str(r.invoice_id)).first()
+            if row is not None:
+                invoice = InvoiceModel.model_validate(row)
+        if getattr(r, "settlement_id", None):
+            row = db.query(RazorpaySettlementDB).filter(RazorpaySettlementDB.id == str(r.settlement_id)).first()
+            if row is not None:
+                settlement = RazorpaySettlementModel.model_validate(row)
+        if getattr(r, "bank_txn_id", None):
+            row = db.query(BankTransactionDB).filter(BankTransactionDB.id == str(r.bank_txn_id)).first()
+            if row is not None:
+                bank_txn = BankTransactionModel.model_validate(row)
+    except Exception as e:
+        logger.error(f"Error reattaching detail rows for result {getattr(r, 'id', '?')}: {e}")
+
     return ReconciliationResultItem(
         id=UUID(str(r.id)),
         session_id=UUID(str(r.session_id)),
@@ -77,6 +97,9 @@ def _result_item_from_db(r: Any) -> ReconciliationResultItem:
         reviewed_at=r.reviewed_at,
         review_action=r.review_action,
         created_at=r.created_at or datetime.now(timezone.utc),
+        invoice=invoice,
+        settlement=settlement,
+        bank_transaction=bank_txn,
     )
 
 
@@ -91,7 +114,7 @@ def find_result(result_id: UUID) -> Optional[ReconciliationResultItem]:
     try:
         db_res = db.query(ReconciliationResultDB).filter(ReconciliationResultDB.id == str(result_id)).first()
         if db_res:
-            return _result_item_from_db(db_res)
+            return _result_item_from_db(db, db_res)
     except Exception as e:
         logger.error(f"Error querying result from DB: {e}")
     finally:
@@ -158,8 +181,8 @@ def persist_reconciliation_session(
     reconciliation_results[sid] = results
 
     # Persist to database (columns mirror the LOCKED Supabase schema).
-    # Detail-table FKs stay NULL: V1 never populates those tables, and the
-    # session-scoped item UUIDs would otherwise violate FK constraints.
+    # Detail rows are saved into their own tables so restored sessions keep
+    # full customer/amount/date data (never hollow N/A rows).
     db = SessionLocal()
     try:
         now = datetime.now(timezone.utc)
@@ -172,13 +195,29 @@ def persist_reconciliation_session(
             exists = db.query(UploadSessionDB).filter(UploadSessionDB.id == uid).first()
             return uid if exists else None
 
+        def _iso(value: Any) -> str:
+            try:
+                return value.isoformat() if hasattr(value, "isoformat") else str(value or "")
+            except Exception:
+                return ""
+
+        def _num(value: Any) -> float:
+            try:
+                return float(value or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        bank_uid = _fk(session_data.get("bank_upload_id"))
+        razorpay_uid = _fk(session_data.get("razorpay_upload_id"))
+        invoice_uid = _fk(session_data.get("invoice_upload_id"))
+
         db_session = db.query(ReconciliationSessionDB).filter(ReconciliationSessionDB.id == sid).first()
         if not db_session:
             db_session = ReconciliationSessionDB(
                 id=sid,
-                bank_upload_id=_fk(session_data.get("bank_upload_id")),
-                razorpay_upload_id=_fk(session_data.get("razorpay_upload_id")),
-                invoice_upload_id=_fk(session_data.get("invoice_upload_id")),
+                bank_upload_id=bank_uid,
+                razorpay_upload_id=razorpay_uid,
+                invoice_upload_id=invoice_uid,
                 total_records=session_data.get("total_records", len(results)),
                 matched_count=session_data.get("matched", 0),
                 review_count=session_data.get("review_required", 0),
@@ -198,17 +237,76 @@ def persist_reconciliation_session(
         # so the unit-of-work cannot order parent/child inserts by itself.
         db.flush()
 
-        # Batch insert results
+        # Batch insert detail rows + results (skip rows already persisted).
         for item in results:
+            if item.invoice is not None and item.invoice_id:
+                inv_id = str(item.invoice_id)
+                if not db.query(InvoiceDB).filter(InvoiceDB.id == inv_id).first():
+                    inv = item.invoice
+                    db.add(InvoiceDB(
+                        id=inv_id,
+                        upload_session_id=str(inv.upload_session_id),
+                        row_number=inv.row_number or 0,
+                        invoice_id=inv.invoice_id,
+                        order_id=inv.order_id or "",
+                        customer_name=inv.customer_name,
+                        issue_date=_iso(inv.issue_date),
+                        amount=_num(inv.amount),
+                        gst_amount=_num(inv.gst_amount),
+                        total_amount=_num(inv.total_amount),
+                        status=inv.status.value if hasattr(inv.status, "value") else str(inv.status or "PAID"),
+                        is_reconciled=bool(inv.is_reconciled),
+                        created_at=inv.created_at,
+                    ))
+            if item.settlement is not None and item.settlement_id:
+                stl_id = str(item.settlement_id)
+                if not db.query(RazorpaySettlementDB).filter(RazorpaySettlementDB.id == stl_id).first():
+                    stl = item.settlement
+                    db.add(RazorpaySettlementDB(
+                        id=stl_id,
+                        upload_session_id=str(stl.upload_session_id),
+                        row_number=stl.row_number or 0,
+                        settlement_id=stl.settlement_id,
+                        order_id=stl.order_id or "",
+                        payment_id=stl.payment_id,
+                        settlement_date=_iso(stl.settlement_date),
+                        gross_amount=_num(stl.gross_amount),
+                        fee=_num(stl.fee),
+                        tax=_num(stl.tax),
+                        net_amount=_num(stl.net_amount),
+                        fee_validated=bool(stl.fee_validated),
+                        is_reconciled=bool(stl.is_reconciled),
+                        created_at=stl.created_at,
+                    ))
+            if item.bank_transaction is not None and item.bank_txn_id:
+                txn_id = str(item.bank_txn_id)
+                if not db.query(BankTransactionDB).filter(BankTransactionDB.id == txn_id).first():
+                    txn = item.bank_transaction
+                    db.add(BankTransactionDB(
+                        id=txn_id,
+                        upload_session_id=str(txn.upload_session_id),
+                        row_number=txn.row_number or 0,
+                        txn_date=_iso(txn.txn_date),
+                        description=txn.description or "",
+                        reference=txn.reference,
+                        extracted_order_id=txn.extracted_order_id,
+                        debit=_num(txn.debit),
+                        credit=_num(txn.credit),
+                        balance=_num(txn.balance) if txn.balance is not None else None,
+                        amount=_num(txn.amount),
+                        is_reconciled=bool(txn.is_reconciled),
+                        created_at=txn.created_at,
+                    ))
+
             item_id = str(item.id)
             existing_res = db.query(ReconciliationResultDB).filter(ReconciliationResultDB.id == item_id).first()
             if not existing_res:
                 db_item = ReconciliationResultDB(
                     id=item_id,
                     session_id=sid,
-                    invoice_id=None,
-                    settlement_id=None,
-                    bank_txn_id=None,
+                    invoice_id=str(item.invoice_id) if item.invoice_id else None,
+                    settlement_id=str(item.settlement_id) if item.settlement_id else None,
+                    bank_txn_id=str(item.bank_txn_id) if item.bank_txn_id else None,
                     match_type=item.match_type.value if hasattr(item.match_type, "value") else str(item.match_type),
                     confidence_score=item.confidence_score,
                     status=item.status.value if hasattr(item.status, "value") else str(item.status),
@@ -352,7 +450,7 @@ def restore_session_to_memory(session_id: str) -> bool:
         }
 
         db_results = db.query(ReconciliationResultDB).filter(ReconciliationResultDB.session_id == session_id).all()
-        reconciliation_results[session_id] = [_result_item_from_db(r) for r in db_results]
+        reconciliation_results[session_id] = [_result_item_from_db(db, r) for r in db_results]
         return True
     except Exception as e:
         logger.error(f"Error restoring session {session_id}: {e}")

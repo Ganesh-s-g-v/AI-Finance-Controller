@@ -115,11 +115,7 @@ class ReconciliationSessionDB(Base):
 
 
 class ReconciliationResultDB(Base):
-    """Mirrors the LOCKED Supabase schema (app/schemas/tables.sql :: reconciliation_results).
-
-    NOTE: invoice_id / settlement_id / bank_txn_id are FKs to detail tables that
-    V1 never populates, so the app persists them as NULL to respect FK constraints.
-    """
+    """Mirrors the LOCKED Supabase schema (app/schemas/tables.sql :: reconciliation_results)."""
     __tablename__ = "reconciliation_results"
 
     id = Column(String(36), primary_key=True)
@@ -136,6 +132,64 @@ class ReconciliationResultDB(Base):
     reviewed_by = Column(String(255), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     review_action = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class BankTransactionDB(Base):
+    """Mirrors the LOCKED Supabase schema (app/schemas/tables.sql :: bank_transactions)."""
+    __tablename__ = "bank_transactions"
+
+    id = Column(String(36), primary_key=True)
+    upload_session_id = Column(String(36), nullable=False)
+    row_number = Column(Integer, nullable=False, default=0)
+    txn_date = Column(String(10), nullable=False)
+    description = Column(Text, nullable=False, default="")
+    reference = Column(Text, nullable=True)
+    extracted_order_id = Column(Text, nullable=True)
+    debit = Column(Float, nullable=False, default=0.0)
+    credit = Column(Float, nullable=False, default=0.0)
+    balance = Column(Float, nullable=True)
+    amount = Column(Float, nullable=False, default=0.0)
+    is_reconciled = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class RazorpaySettlementDB(Base):
+    """Mirrors the LOCKED Supabase schema (app/schemas/tables.sql :: razorpay_settlements)."""
+    __tablename__ = "razorpay_settlements"
+
+    id = Column(String(36), primary_key=True)
+    upload_session_id = Column(String(36), nullable=False)
+    row_number = Column(Integer, nullable=False, default=0)
+    settlement_id = Column(String(100), unique=True, nullable=False)
+    order_id = Column(String(100), nullable=False)
+    payment_id = Column(String(100), nullable=True)
+    settlement_date = Column(String(10), nullable=False)
+    gross_amount = Column(Float, nullable=False, default=0.0)
+    fee = Column(Float, nullable=False, default=0.0)
+    tax = Column(Float, nullable=False, default=0.0)
+    net_amount = Column(Float, nullable=False, default=0.0)
+    fee_validated = Column(Boolean, nullable=False, default=True)
+    is_reconciled = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class InvoiceDB(Base):
+    """Mirrors the LOCKED Supabase schema (app/schemas/tables.sql :: invoices)."""
+    __tablename__ = "invoices"
+
+    id = Column(String(36), primary_key=True)
+    upload_session_id = Column(String(36), nullable=False)
+    row_number = Column(Integer, nullable=False, default=0)
+    invoice_id = Column(String(100), unique=True, nullable=False)
+    order_id = Column(String(100), nullable=False)
+    customer_name = Column(Text, nullable=True)
+    issue_date = Column(String(10), nullable=False)
+    amount = Column(Float, nullable=False, default=0.0)
+    gst_amount = Column(Float, nullable=False, default=0.0)
+    total_amount = Column(Float, nullable=False, default=0.0)
+    status = Column(String(20), nullable=False, default="PAID")
+    is_reconciled = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
